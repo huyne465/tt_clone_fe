@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart' hide Video;
 import '../../features/video/data/models/video_model.dart';
 import '../../view_models/video_viewmodel.dart';
+import '../../utils/size_config.dart';
 
 class VideoPlayerItem extends ConsumerStatefulWidget {
   final VideoModel video;
@@ -53,8 +55,32 @@ class _VideoPlayerItemState extends ConsumerState<VideoPlayerItem> {
 
     debugPrint('Playing video: ${widget.video.url}');
     
-    await _player.open(Media(widget.video.url));
-    await _player.setPlaylistMode(PlaylistMode.single);
+    try {
+      String playUrl = widget.video.url;
+      
+      // Extract stream if it's YouTube
+      if (playUrl.contains('youtube.com') || playUrl.contains('youtu.be')) {
+        final yt = YoutubeExplode();
+        try {
+          debugPrint('Extracting stream for ${widget.video.id}...');
+          final manifest = await yt.videos.streamsClient.getManifest(widget.video.id);
+          // Get the best quality muxed stream (video + audio)
+          // For shorts/vertical, sometimes separate streams are better, but muxed is safest for basic player.
+          final streamInfo = manifest.muxed.withHighestBitrate();
+          playUrl = streamInfo.url.toString();
+          debugPrint('Stream URL extracted: $playUrl');
+        } catch (e) {
+          debugPrint('Error extracting YouTube stream: $e');
+        } finally {
+          yt.close();
+        }
+      }
+
+      await _player.open(Media(playUrl));
+      await _player.setPlaylistMode(PlaylistMode.single);
+    } catch (e) {
+      debugPrint('Error opening media: $e');
+    }
     
     _player.stream.error.listen((event) {
        debugPrint('VideoPlayer Error: $event');
@@ -63,9 +89,11 @@ class _VideoPlayerItemState extends ConsumerState<VideoPlayerItem> {
        debugPrint('VideoPlayer Log: $event');
     });
     
-    setState(() {
-      _initialized = true;
-    });
+    if (mounted) {
+      setState(() {
+        _initialized = true;
+      });
+    }
 
     // Initial check to play if already visible
     _checkPlayStatus();
@@ -101,16 +129,22 @@ class _VideoPlayerItemState extends ConsumerState<VideoPlayerItem> {
 
     return Container(
       color: Colors.black,
+      width: SizeConfig.screenWidth,
+      height: SizeConfig.screenHeight,
       child: Stack(
         fit: StackFit.expand,
         children: [
           if (_initialized)
-            Video(
-              controller: _controller,
-              fit: BoxFit.cover,
-               // Hardware decoding is automatic in media_kit default configuration usually,
-               // but we ensure scaling is optimal.
-               controls: NoVideoControls,
+            SizedBox(
+              width: SizeConfig.screenWidth,
+              height: SizeConfig.screenHeight,
+              child: Video(
+                controller: _controller,
+                fit: BoxFit.cover,
+                 // Hardware decoding is automatic in media_kit default configuration usually,
+                 // but we ensure scaling is optimal.
+                 controls: NoVideoControls,
+              ),
             )
           else
             const Center(
@@ -119,26 +153,26 @@ class _VideoPlayerItemState extends ConsumerState<VideoPlayerItem> {
           
           // Overlay Info (Title, User, Likes)
           Positioned(
-            bottom: 20,
-            left: 20,
-            right: 100, // Space for side buttons
+            bottom: SizeConfig.scaleHeight(20),
+            left: SizeConfig.scaleWidth(20),
+            right: SizeConfig.scaleWidth(100), // Space for side buttons
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   widget.video.username,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                    fontSize: SizeConfig.scaleText(16),
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: SizeConfig.scaleHeight(8)),
                 Text(
                   widget.video.title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 14,
+                    fontSize: SizeConfig.scaleText(14),
                   ),
                 ),
               ],
@@ -147,18 +181,18 @@ class _VideoPlayerItemState extends ConsumerState<VideoPlayerItem> {
           
           // Side Action Buttons (Likes, etc)
            Positioned(
-            bottom: 20,
-            right: 10,
+            bottom: SizeConfig.scaleHeight(20),
+            right: SizeConfig.scaleWidth(10),
             child: Column(
               children: [
-                const Icon(Icons.favorite, size: 35, color: Colors.white),
-                Text('${widget.video.likes}', style: const TextStyle(color: Colors.white)),
-                const SizedBox(height: 20),
-                const Icon(Icons.comment, size: 35, color: Colors.white),
-                const Text('404', style: TextStyle(color: Colors.white)),
-                 const SizedBox(height: 20),
-                const Icon(Icons.share, size: 35, color: Colors.white),
-                 const Text('Share', style: TextStyle(color: Colors.white)),
+                Icon(Icons.favorite_border, size: SizeConfig.scaleIcon(24), color: Colors.white),
+                Text('${widget.video.likes}', style: TextStyle(color: Colors.white, fontSize: SizeConfig.scaleText(12))),
+                SizedBox(height: SizeConfig.scaleHeight(20)),
+                Icon(Icons.chat_bubble_outline, size: SizeConfig.scaleIcon(24), color: Colors.white),
+                Text('${widget.video.comments}', style: TextStyle(color: Colors.white, fontSize: SizeConfig.scaleText(12))),
+                 SizedBox(height: SizeConfig.scaleHeight(20)),
+                Icon(Icons.share_outlined, size: SizeConfig.scaleIcon(24), color: Colors.white),
+                 Text('Share', style: TextStyle(color: Colors.white, fontSize: SizeConfig.scaleText(12))),
               ],
             ),
           )

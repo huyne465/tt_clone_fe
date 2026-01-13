@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/size_config.dart';
 
 class SkeletonVideoWidget extends StatefulWidget {
   const SkeletonVideoWidget({super.key});
@@ -36,6 +37,8 @@ class _SkeletonVideoWidgetState extends State<SkeletonVideoWidget> with SingleTi
       animation: _animation,
       builder: (context, child) {
         return Container(
+          width: SizeConfig.screenWidth,
+          height: SizeConfig.screenHeight,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,

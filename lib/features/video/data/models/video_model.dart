@@ -5,9 +5,11 @@ class VideoModel {
   final int likes;
   final String username;
   final String? thumbnail;
-  
-  // Pexels specific
   final String caption;
+  final int comments;
+  final int shares;
+  final String songName;
+  final String profilePhoto;
 
   VideoModel({
     required this.id,
@@ -17,18 +19,37 @@ class VideoModel {
     required this.username,
     this.thumbnail,
     required this.caption,
+    this.comments = 0,
+    this.shares = 0,
+    this.songName = 'Original Sound',
+    this.profilePhoto = 'https://files.fullstack.edu.vn/f8-prod/user_avatars/1/623d4b2d95cec.png',
   });
 
   factory VideoModel.fromJson(Map<String, dynamic> json) {
-    String url = '';
-    String thumbnail = '';
-    
-    // Check if it's Pexels format
+    // YouTube API Handler
+    if (json.containsKey('snippet') && json.containsKey('id')) {
+      final snippet = json['snippet'];
+      final statistics = json['statistics'] ?? {};
+      final String videoId = json['id'] is String ? json['id'] : (json['id']['videoId'] ?? '');
+      
+      return VideoModel(
+        id: videoId,
+        url: 'https://www.youtube.com/shorts/$videoId',
+        title: snippet['title'] ?? '',
+        likes: int.tryParse(statistics['likeCount'] ?? '0') ?? 0,
+        username: snippet['channelTitle'] ?? '',
+        thumbnail: snippet['thumbnails']?['high']?['url'] ?? snippet['thumbnails']?['default']?['url'],
+        caption: snippet['title'] ?? '',
+        comments: int.tryParse(statistics['commentCount'] ?? '0') ?? 0,
+        shares: 0, // Not available in standard snippet/stats
+        songName: 'Original Sound', // Could extract from topicDetails if needed
+        profilePhoto: snippet['thumbnails']?['default']?['url'] ?? 'https://files.fullstack.edu.vn/f8-prod/user_avatars/1/623d4b2d95cec.png', // Fallback, getting channel avatar requires separate call
+      );
+    }
+
+    // Existing Pexels Handler (Legacy)
     if (json.containsKey('video_files')) {
        final videoFiles = json['video_files'] as List<dynamic>;
-      // Fix OOM/Lag: Pexels 'hd' can be 1080p or 4k which is too heavy for emulators/low-end phones.
-      // We prioritize 'sd' (usually 540p/960x540) which offers the best balance of quality/performance.
-      // If 'sd' is missing, we look for a light 'hd' (< 1080).
       final videoFile = videoFiles.firstWhere(
         (file) => file['quality'] == 'sd',
         orElse: () => videoFiles.firstWhere(
@@ -36,29 +57,27 @@ class VideoModel {
           orElse: () => videoFiles.first,
         ),
       );
-      url = videoFile['link'];
-      thumbnail = json['image'];
       
       return VideoModel(
         id: json['id'].toString(),
-        url: url,
+        url: videoFile['link'],
         title: 'Video by ${json['user']['name']}',
-        likes: 0, // Pexels doesn't give likes easily in this endpoint
+        likes: 0, 
         username: json['user']['name'],
-        thumbnail: thumbnail,
+        thumbnail: json['image'],
         caption: 'Video by ${json['user']['name']}',
       );
-    } else {
-      // Fallback or other source
-      return VideoModel(
-        id: json['id'] as String,
-        url: json['url'] as String,
-        title: json['title'] as String,
-        likes: json['likes'] as int,
-        username: json['username'] as String,
-        thumbnail: json['thumbnail'] as String?,
-        caption: json['title'] as String,
-      );
-    }
+    } 
+    
+    // Generic Fallback
+    return VideoModel(
+      id: json['id']?.toString() ?? '',
+      url: json['url']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      likes: json['likes'] is int ? json['likes'] : 0,
+      username: json['username']?.toString() ?? 'User',
+      thumbnail: json['thumbnail']?.toString(),
+      caption: json['title']?.toString() ?? '',
+    );
   }
 }
